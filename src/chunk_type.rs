@@ -12,22 +12,7 @@ pub struct ChunkType {
     bytes: [u8; CHUNK_TYPE_SIZE],
 }
 
-#[derive(Debug, PartialEq)]
-pub enum ChunkTypeError {
-    InputNotAscii,
-    LengthNot4,
-}
-
 impl ChunkType {
-    fn build(bytes: [u8; CHUNK_TYPE_SIZE]) -> Result<Self, ChunkTypeError> {
-        let c = Self { bytes };
-        if !c.is_valid_bytes() {
-            Err(ChunkTypeError::InputNotAscii)
-        } else {
-            Ok(Self { bytes })
-        }
-    }
-
     /// Valid bytes are represented by the characters A-Z or a-z
     fn is_valid_byte(byte: u8) -> bool {
         byte.is_ascii_alphabetic()
@@ -70,25 +55,45 @@ impl ChunkType {
     }
 }
 
-impl TryFrom<[u8; CHUNK_TYPE_SIZE]> for ChunkType {
-    type Error = ChunkTypeError;
+#[derive(Debug)]
+pub enum ChunkTypeDecodeError {
+    InputNotAscii([u8; CHUNK_TYPE_SIZE]),
+    LengthNot4(usize),
+}
 
-    fn try_from(value: [u8; CHUNK_TYPE_SIZE]) -> Result<Self, Self::Error> {
-        Self::build(value)
+impl Display for ChunkTypeDecodeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InputNotAscii(bytes) => writeln!(f, "Input not ASCII: {:?}", bytes),
+            Self::LengthNot4(length) => writeln!(f, "Length of chunk type not 4: {length}"),
+        }
+    }
+}
+
+impl TryFrom<[u8; CHUNK_TYPE_SIZE]> for ChunkType {
+    type Error = ChunkTypeDecodeError;
+
+    fn try_from(bytes: [u8; CHUNK_TYPE_SIZE]) -> Result<Self, Self::Error> {
+        let c = Self { bytes };
+        if !c.is_valid_bytes() {
+            Err(ChunkTypeDecodeError::InputNotAscii(bytes))
+        } else {
+            Ok(Self { bytes })
+        }
     }
 }
 
 impl FromStr for ChunkType {
-    type Err = ChunkTypeError;
+    type Err = ChunkTypeDecodeError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let b = s.as_bytes();
         if b.len() != CHUNK_TYPE_SIZE {
-            return Err(Self::Err::LengthNot4);
+            return Err(Self::Err::LengthNot4(b.len()));
         }
 
-        let b: [u8; CHUNK_TYPE_SIZE] = [b[0], b[1], b[2], b[3]];
-        Self::build(b)
+        let b: [u8; CHUNK_TYPE_SIZE] = b[0..4].try_into().unwrap();
+        Self::try_from(b)
     }
 }
 
